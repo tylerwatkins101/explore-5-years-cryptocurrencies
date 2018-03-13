@@ -1,0 +1,1045 @@
+---
+title: "Data Analyst Nanodegree Project 6: Exploring 5 Years of Cryptocurrency Data"
+author: "Tyler Watkins"
+date: "06-Feb-2018"
+output: html_document
+---
+
+
+========================================================
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+library(GGally)
+library(ggthemes)
+library(gridExtra)
+library(RColorBrewer)
+library(xts)
+
+library(dplyr)
+library(tidyr)
+library(readr)
+library(lubridate)
+library(reshape2)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE,  Load_the_Data}
+# Load the Data
+
+df_crypto <- read.csv('coinmarket_290118.csv')
+```
+
+## Introduction
+
+In this exploration I look at Cryptocurrency Market Data.
+
+The dataset is the historical cryptocurrency data for all tokens scraped from https://coinmarketcap.com/.
+
+#### Dataset details
+
+Includes all historic open, high, low, close, trading volume and market cap info for all cryptocurrencies. As well as two extra variables, close_ratio and spread.
+
+Close ratio is the daily close rate, min-maxed with the high and low values for the day.
+Spread is the USD difference between the high and low values for the day.
+
+- Observations: 672,996 
+- Variables: 14 
+- Crypto Tokens: 1,494
+- Data taken from 28-Apr-2013 to 28-Jan-2018
+
+Dataset was scraped from https://coinmarketcap.com/ on 29-Jan-2018 and saved as file: 'coinmarket_290118.csv'
+
+Scraping package can be found at https://github.com/JesseVent/crypto
+
+#### Exploration
+
+In this exploration I will attempt gain an understanding of the distribution of the crypto token landscape as it stood on 28-Jan-2018. 
+
+I will also look at how the landscape has changed over time since coinmarketcap.com started tracking these tokens in 2013.
+
+My main interest is in the exploring the overall market capitalization, number of tokens, trading volume and market capitalization per token. And how those numbers change over time.
+
+I will look for correlations of the change in market capitalization among tokens, as well as versus the overall market capitalization.
+
+
+
+# Univariate Plots Section
+
+We'll start by exploring single variables in this section.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE, Univariate_Plots}
+head(df_crypto)
+```
+
+The dataframe has 672,996 observations of 14 variables. With 1494 unique tokens.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+str(df_crypto)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(df_crypto)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# I start by cleaning the dataset. Some names and symbols are shared. 
+# As per the creator of the scraping tool the variable slug was made 
+# to solve this problem. Therefore slug will be used as the token reference.
+
+df_crypto <- subset(df_crypto, select = -c(close_ratio, spread, name, X))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_crypto <- rename(df_crypto, name = slug)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Here I make the date variable a datetime object.
+
+df_crypto$date <- ymd(df_crypto$date)
+```
+
+Which tokens are the oldest and have been tracked since 2013? 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+head(arrange(summarise(group_by(df_crypto, name), 
+                       age = length(unique(date))), desc(age)))
+```
+
+Here we see a list of the tokens who appear for the largest number of days in our dataset.
+
+Of the originals. Bitcoin and Litecoin are still some of the largest tokens today, however the rest of these tokens from 2013 have all but disappeared from relevancy.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Here I add several new variables to help my exploration. 
+
+# daily_total_market
+# market_share
+# date_started_tracking
+# year_started_tracking
+
+df_crypto <- merge(df_crypto, 
+                   summarise(group_by(df_crypto,date), 
+                             daily_total_market = sum(market)), on = "date")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_crypto$market_share <- df_crypto$market/df_crypto$daily_total_market
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+df_crypto <- merge(df_crypto, arrange(summarise(group_by(df_crypto, name), 
+          date_started_tracking=date[1], year_started_tracking = year(date[1])), 
+          date_started_tracking), by = "name")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# I make year_started_tracking a categorical variable for use in future plots
+
+df_crypto$year_started_tracking <- factor(df_crypto$year_started_tracking)
+```
+
+***
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# Now a look at our newly cleaned dataset
+
+str(df_crypto)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# Because 2017 was such an important year for cryptocurrencies I create a 
+# dataframe to explore it on it's own.
+
+crypto_2017 <- arrange(subset(df_crypto, 
+                              date > "2016-12-31" & 
+                                date < "2018-01-01"), name, date)
+head(crypto_2017)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+summary(crypto_2017)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# Before we start looking at how the cryptocurrency landscape has changed 
+# over time. I want to take a look at the overall picture today. I will use 
+# this new dataframe to explore the world of cryptocurrencies on 28-Jan-2018.
+
+crypto_28_jan_2018 <- subset(df_crypto, date == "2018-01-28")
+head(arrange(crypto_28_jan_2018,desc(market)))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+summary(crypto_28_jan_2018)
+```
+
+Before I start looking at how the cryptocurrency landscape has changed over time. I want to take a stationary look at the overall picture as of 28-Jan-2018.
+
+### Exploring the Cryptocurrency Market as of 28-Jan-2018
+
+Here I plot the distribution of crypto tokens by market capitalization.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = market), data = crypto_28_jan_2018) + geom_histogram() + 
+  ggtitle('Distribution of Cryptocurrency Market Caps on 28-Jan-2018')
+```
+
+We can see that most coins have very small market caps compared to the big ones. The distribution is very right-skewed.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=market), data=crypto_28_jan_2018) + 
+  geom_histogram(fill='#099DD9') + 
+  scale_x_log10() + 
+labs(title = 'Log_10 Distribution of Cryptocurrency Market Caps on 28-Jan-2018',
+     x = 'Market Capitalization in USD', y = 'Tokens')
+```
+
+However, on a log scale it is very normally distributed. 
+
+Let's look at a histogram of token price.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = close), data = crypto_28_jan_2018) + 
+  geom_histogram() +
+  ggtitle('Distribution of Cryptocurrency Token Price on 28-Jan-2018')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=close), data=crypto_28_jan_2018) + 
+  geom_histogram() + 
+  scale_x_log10() +
+  ggtitle('Log_10 Distribution of Cryptocurrency Token Price on 28-Jan-2018')
+```
+
+Price is also log normally distributed. Let's look at trading volume.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = volume), data = crypto_28_jan_2018) + geom_histogram() +
+  ggtitle('Distribution of Cryptocurrency Trading Volume on 28-Jan-2018')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = volume), data = crypto_28_jan_2018) + 
+  geom_histogram() + 
+  scale_x_log10() +
+  ggtitle('Log_10 Distribution of Cryptocurrency Trading Volume on 28-Jan-2018')
+  
+```
+
+Trading Volume is also log normally distributed.
+
+Since we know that most of the market is in the top coins. Let's find out how much exactly.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sum(subset(crypto_28_jan_2018, market > 
+    quantile(market, prob = 1 - 10/100))$market)/sum(crypto_28_jan_2018$market)
+```
+
+Although we have 1494 tokens. We can see that 96.9% of the market capitalization is invested in only 10% of the tokens.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sum(subset(crypto_28_jan_2018, market > 
+    quantile(market, prob = 1 - 1/100))$market)/sum(crypto_28_jan_2018$market)
+```
+
+That 83.1% of the market is in only 1% of the tokens.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sum(subset(crypto_28_jan_2018, market > 
+    quantile(market, prob = 1 - 0.5/100))$market)/sum(crypto_28_jan_2018$market)
+```
+
+And that 75.3% of the market is in the top 0.5% of tokens.
+
+What are those top 0.5% of tokens with 3/4 of the money?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=name, y=market), data = (subset(crypto_28_jan_2018, market > 
+            quantile(market, prob = 1 - 0.5/100)))) + 
+  geom_col(fill = "#E74C3C") + 
+  labs(title = 'Market Capitalizations of Top Cryptocurrencies 28-Jan-2018', 
+       x = 'Tokens', y = 'Market Capitalization in USD')
+```
+
+Here we see that even within the top 0.5% that Bitcoin, Ethereum and Ripple dominate. This is a very top heavy market.
+
+Let's look at some statistical summaries of the marketcap data for 28-Jan-2018.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(crypto_28_jan_2018$market)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+quantile(crypto_28_jan_2018$market, probs = c(0, 0.1, 0.5, 0.9, 1)) 
+```
+
+Here we can see that 50% of the tokens have a market capitalization of $1.7 million or less and 90% have a market cap of $145 million or less.
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+The dataset has 672,996 observations and 14 Variables describing 1,494 Crypto Tokens from 28-Apr-2013 to 28-Jan-2018. 
+
+This dataset describes the price, market and trading volume information of crypto tokens, and how they change over time.
+
+In this section I explored a snapshot in time of the cryptocurrency market as of 28-Jan-2018.
+
+I was able to see that the price, marketcap, and trading volume of the 1494 observed tokens was log-normally distributed. The vast majority of capital and trading is happening in the biggest tokens.
+
+I also found that although we have 1494 tokens. The top 10% of the tokens represent 96.9% of the cryptocurrency marketcap. And the top 1% of the tokens represent 83.1%.
+
+
+### What is/are the main feature(s) of interest in your dataset?
+
+The main features of interest in this dataset are token price/market capitalization and how they change over time.
+
+### What other features in the dataset do you think will help support your \ investigation into your feature(s) of interest?
+
+The feature of interest that I will explore more from here is the time variable. I will explore how the cryptocurrency market capitalization changes over time. How the individual tokens change over time. And how correlated these changes are to eachother.
+
+As well, it may be interesting to look at how trading volume is related to market capitulation.
+
+### Did you create any new variables from existing variables in the dataset?
+
+I created 4 new variables.
+
+daily_total_market - is the total cryptocurrency market capitalization of that day
+
+market_share - is the token market share of the total cryptocurrency market cap of that day
+
+date_started_tracking - is the date coinmarketcap.com started tracking the token
+
+year_started_tracking - is the year coinmarketcap.com started tracking the token
+
+
+### Of the features you investigated, were there any unusual distributions? \ Did you perform any operations on the data to tidy, adjust, or change the form \ of the data? If so, why did you do this?
+
+The cryptocurrency space as of 28-Jan-2018 is log-normally distributed for major token attributes such as trading volume, market capitalization and token price.
+
+The top 10% of tokens account for 96.9% of the total market, and the top 1% account for 83.1% of total market.
+
+Even among the top 1% of tokens Bitcoin, Ethereum, and Ripple are the dominant tokens. I will explore marketshare dominance more in the next section.
+
+
+I deleted the variables name, closing ratio, and spread. Closing ratio was full of NA values and I didn't see a need to use any of these 3 variables.
+
+
+As per the creator of the scraping tool (documentation found here: https://github.com/JesseVent/crypto) the variable slug is the unique reference for each token.
+
+Therefore, I used the variable slug as my reference for the token name, and changed the column name "slug" to column name "name" to reflect this.
+
+
+I created a dataframe for only 2017 data (crypto_2017) because 2017 was the year where most of the action occurred in the cryptocurrency world and I wanted to explore it in more detail in the next section.
+
+I created the single day dataframe (crypto_28-jan-2018) to be able to take a better look at a snapshot in time of the data before exploring the changes that occurred over time.
+
+
+# Bivariate Plots Section
+
+In this section we'll explore how multiple variables interact.
+
+First, let's look at how the total cryptocurrency market, number of tokens and trading volume have grown over time.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+q1 <- ggplot(aes(x=date, y=market_size), 
+      data=summarise(group_by(df_crypto, date), market_size = sum(market))) + 
+  geom_line(color="#196F3D") + 
+  scale_y_log10() + 
+  labs(title = 'Log_10 Cryptocurrency Total Market Capitalization Growth in USD'
+       , x = 'Date', y = 'Market Cap USD')
+
+q2 <- ggplot(aes(x=date, y=tokens), data = summarise(group_by(df_crypto, date),
+         tokens=length(unique(name)))) + 
+  geom_line(color='#E74C3C') + 
+  labs(title = 'Growth in Number of Crypto Tokens', x = 'Date', y = 'Tokens')
+
+q3 <- ggplot(aes(x=date, y=trading_volume), 
+      data=summarise(group_by(df_crypto, date), trading_volume = sum(volume))) + 
+  geom_line(color='#099DD9') + 
+  scale_y_log10() + 
+  labs(title = 'Log_10 Cryptocurrency Daily Trading Volume Growth in USD', 
+       x = 'Date', y = 'Trading Volume USD')
+
+grid.arrange(q1, q2, q3, ncol=1)
+
+```
+
+Wow. That's growth. Both trading volume and total marketcap have increased exponentially since 2014. The number of tokens is also increasing rapidly although I wouldn't say exponentially. Let's look at only 2017 now.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# 80 character rule broken here to not cut the plot title
+
+p4 <- ggplot(aes(x=date, y=market_size), 
+             data=summarise(group_by(crypto_2017, date), 
+                            market_size = sum(market))) + 
+  geom_line() + 
+  scale_y_log10() + 
+  labs(title = 'Log_10 Cryptocurrency Total Market Capitalization Growth in USD - 2017'
+       , x = 'Date', y = 'Market Cap USD')
+
+p5 <- ggplot(aes(x=date, y=tokens), 
+             data = summarise(group_by(crypto_2017, date), 
+                              tokens=length(unique(name)))) + 
+  geom_line() +
+  labs(title = 'Growth in Number of Crypto Tokens - 2017', x = 'Date', 
+       y = 'Tokens')
+
+p6 <- ggplot(aes(x=date, y=trading_volume), 
+          data=summarise(group_by(crypto_2017, date),
+                          trading_volume = sum(volume))) + geom_line() + 
+  scale_y_log10() + 
+  labs(title = 'Log_10 Cryptocurrency Daily Trading Volume Growth in USD - 2017'
+       , x = 'Date', y = 'Trading Volume USD')
+
+grid.arrange(p4, p5, p6, ncol=1)
+
+```
+
+An enormous amount of growth in just 1 year. 2017 was a crazy year for the cryptocurrency market.
+
+But was the growth evenly distributed? Let's take a look at the 2017 price growth of the top coins.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots}
+ggplot(aes(x=date, y=close), data=subset(crypto_2017, ranknow <= 5)) + 
+  geom_line() +
+  facet_wrap( ~ name) +
+  scale_y_log10() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle('Log_10 2017 Price Growth in USD for Major Cryptocurrencies')
+```
+
+Price grew exponentially for these 5 major currencies. Let's look at marketcap
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=market), data=subset(crypto_2017, ranknow <= 5)) + 
+  geom_line() +
+  facet_wrap( ~ name) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  scale_y_log10() +
+  ggtitle('Log_10 2017 Market Cap Growth in USD for Major Cryptocurrencies')
+```
+
+Market cap grew exponentially as well. Maybe the best thing to do is to look at the ratio of change in price during the year.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Create a new variable called gain_ratio which tracks the tokens growth in 2017
+
+crypto_2017 <- merge(crypto_2017, 
+                     summarise(group_by(crypto_2017, name),
+                               first_close = close[1]))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+crypto_2017$gain_ratio <- crypto_2017$close/crypto_2017$first_close
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(aes(x=date, y=gain_ratio), data=subset(crypto_2017, ranknow <= 5)) + 
+  geom_line() + 
+  facet_wrap( ~ name) +
+  scale_y_log10() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle('Log_10 2017 Ratio of Price Increase for Major Cryptocurrencies')
+
+```
+
+Looks like Ripple grew substantially in 2017. Ripple increased in price by more than 300x. To see more clearly the other major tokens let's remove ripple from the next plot and plot on a linear scale.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=gain_ratio), data=subset(crypto_2017, ranknow <= 5 & 
+                                  name != "ripple")) + 
+  geom_line() + 
+  facet_wrap( ~ name) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle('2017 Ratio of Price Increase for Major Cryptocurrencies')
+```
+
+Here we can see that etheruem also grew a lot in 2017, up almost 100x. 
+
+Now, let's see who were the biggest gainers in 2017. Because data on the smallest tokens can be unreliable I will look at only tokens that ended the year with at least $100 million in market cap.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Build a new dataframe to show only 2017 gain_ratio and market cap for tokens 
+# who ended the year with more than a $100 million market cap
+
+crypto_gains_2017 <- 
+  subset(crypto_2017, date == "2017-12-31" & market > 100000000) %>% 
+group_by(name, gain_ratio) %>%
+summarise(market = market) %>% 
+  arrange(desc(gain_ratio))
+head(crypto_gains_2017, 50)
+```
+
+Some tokens had insane growth in 2017. Experience-points went up 40,355x and verge went up 10,118x. 
+
+Ethereum, which is one of the largest players and highly respected in the cryptocurrency space went up 92.6x. As amazing as this is it was still only the 38th biggest gainer of the year with marketcap over $100,000,000.
+
+
+Is there any correlation between the top gaining coins and their end of year market cap?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=market, y=gain_ratio), data=crypto_gains_2017) + 
+  geom_point() +
+  ggtitle('2017 Ratio of Price Increase vs Market Cap')
+```
+
+It doesn't look like it. Let's remove the largest 5% from both variables and try again.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=market, y=gain_ratio), 
+       data = subset(crypto_gains_2017, gain_ratio < 
+                       quantile(gain_ratio, prob = 1 - 5/100) & market < 
+                       quantile(market, prob = 1 - 5/100))) + 
+  geom_point() +
+  ggtitle('2017 Ratio of Price Increase vs Market Cap')
+```
+
+I still don't see a relationship here.
+
+What if we look at the relationship logarithmically.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=market, y=gain_ratio), data = subset(crypto_gains_2017, 
+        gain_ratio < quantile(gain_ratio, prob = 1 - 5/100) & 
+          market < quantile(market, prob = 1 - 5/100))) + 
+  geom_point(alpha=0.5) +      
+  geom_smooth(method = "lm", se = FALSE,size=1) +
+  ggtitle('2017 Ratio of Price Increase vs Market Cap')+
+  scale_y_log10()+      
+  scale_x_log10()
+```
+
+There may be a weak relationship here between 2017 ratio of price increase and market cap.
+
+However, this is as far as I will explore this relationship.
+
+Now, let's look the distribution of gains of the various tokens in 2017
+
+### Distribution of Gains in 2017
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=gain_ratio), data=crypto_gains_2017) + 
+  geom_histogram() +
+  ggtitle('Distribution of Token Gain Ratios in Price in 2017')
+```
+
+Gains are heavily right skewed. 
+
+What about a statistical summary?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(crypto_gains_2017)
+```
+
+Here we can clearly see that there were some tokens with huge gains in 2017 in the cryptocurrency world. However it was extremely right skewed. The median gain was 15.58 and the mean gain 492.39. 
+
+Let's look at it on a log scale.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=gain_ratio), data=crypto_gains_2017) + 
+  geom_histogram(fill='#58D68D') + 
+  geom_vline(xintercept=31.7, label="Whole Market") +
+  geom_text(aes(x=27, label="Market Gain 31.7x", y=9), angle=90) +
+  scale_x_log10() + 
+  labs(title='Log_10 Distribution of Token Gain Ratios in Price in 2017',
+       x = 'End of 2017 Price / Initial 2017 Price', y = 'Tokens')
+```
+
+Even the gains that tokens make is log normally distributed. A few coins gained a ton while the vast majority gained a little.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+quantile(crypto_gains_2017$gain_ratio, probs = c(0, 0.1, 0.5, 0.9, 1))
+```
+
+Here we can see that 50% of the coins gained less than 15.6x and 90% gained less than 379x.
+
+How much did the total cryptocurrency market gain as a whole in 2017?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+market_gain_2017 <- (subset(crypto_2017,
+  date=="2017-12-31")$daily_total_market[1])/(subset(crypto_2017,
+   date=="2017-01-01")$daily_total_market[1])
+
+market_gain_2017
+```
+
+The total market increased 31.7x in 2017.
+
+Is there a correlation between trading volume and marketcap?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=volume, y=market), data=crypto_2017) + 
+  geom_point() +
+  ggtitle('2017 Trading Volume vs Token Market Cap')
+```
+
+It looks like there is a relationship.
+
+Let's do a linear regression to see how strong it is.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(memisc)
+m1 <- lm(I(volume) ~ I(market), data = crypto_2017)
+mtable(m1, sdigits=3)
+```
+
+R-squared of 0.813 shows there is a correlation. The bigger the market the higher the trading volume.
+
+
+
+Now, let's come back to 28-Jan-2018 for a moment. This time let's examine our data by categorizing our tokens by the year they began being tracked on coinmarketcap.com.
+
+### Is the Year a Token was Introduced Related to it's Market Cap?
+
+Let's look at the distribution of the token marketcaps on 28-Jan-2018 based on the year that the token was introduced.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=market),data= subset(df_crypto, date=="2018-01-28")) +
+  geom_histogram(aes(fill=year_started_tracking)) + scale_x_log10() +
+  scale_fill_brewer(type="seq", palette=4, direction=-1) +
+  ggtitle('28-Jan-2018 Distribution of Token Market Caps by Year Introduced')
+```
+
+Here we see the distributions of the market caps in boxplot form..
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=year_started_tracking, y=market),data= subset(df_crypto,
+      date="2018-01-28")) + geom_boxplot() + scale_y_log10() +
+  ggtitle('28-Jan-2018 Box Plots of Token Market Caps by Year Introduced')
+```
+
+It looks like the newer tokens make up the majority of mid-priced tokens and the older tokens still have the largest market caps.
+
+Let's look more at the marketcaps of tokens based on year introduced
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summarise(group_by(subset(df_crypto,date=="2018-01-28"), year_started_tracking),
+          max_mrkt = max(market), min_mrkt = min(market), 
+          mean_mkrt = mean(market), median_mrkt = median(market), n=n())
+```
+
+Here we can see that we have less older tokens but they make up the majority of the market capitalization.
+
+Let's look at the top 10% of the market
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# 80 character rule broken here to not cut the plot title 
+
+ggplot(aes(x=market),data= subset(df_crypto,date=="2018-01-28" & market >
+  quantile(market, prob = 1 - 10/100))) + 
+  geom_histogram(aes(fill=year_started_tracking)) + 
+  scale_fill_brewer(type="seq", palette=4, direction=-1) +
+  scale_x_log10() +
+  ggtitle('28-Jan-2018 Distribution of Token Market Caps by Year Introduced - Top 10%')
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# 80 character rule broken here to not cut the plot title
+
+ggplot(aes(y=market, x=year_started_tracking),
+       data= subset(df_crypto,date=="2018-01-28" & market >
+  quantile(market, prob = 1 - 10/100))) + 
+  geom_boxplot(aes( )) + 
+  scale_y_log10() +
+  ggtitle('28-Jan-2018 Box Plots of Token Market Caps by Year Introduced - Top 10%')
+```
+
+And the top 1%
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# 80 character rule broken here to not cut the plot title
+
+ggplot(aes(x=market),data= subset(df_crypto,date=="2018-01-28" & market >
+  quantile(market, prob = 1 - 1/100))) + 
+  geom_histogram(aes(fill=year_started_tracking)) + scale_x_log10() +
+  scale_fill_brewer(type="seq", palette=4, direction=-1) +
+  ggtitle('28-Jan-2018 Distribution of Token Market Caps by Year Introduced - Top 1%')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# 80 character rule broken here to not cut the plot title
+
+ggplot(aes(y=market, x=year_started_tracking),
+       data= subset(df_crypto,date=="2018-01-28" & market >
+  quantile(market, prob = 1 - 1/100))) + 
+  geom_boxplot(aes( )) + 
+  scale_y_log10() +
+  ggtitle('28-Jan-2018 Box Plots of Token Market Caps by Year Introduced - Top 1%')
+```
+
+Here it becomes clear that the very largest marketcaps belong to older tokens but some of the tokens introduced in 2017 are beginning to invade the top 1%.
+
+### Correlation Among Tokens and the Overall Market
+
+Now I would like to look at correlations among tokens. 
+
+I want to see how correlated changes in marketcap over time are between the top tokens and how related each token is to the market as a whole.
+
+Let's build a correlation matrix for some of the top cryptocurrencies.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Create a new dataframe for comparing the marketcap changes in tokens in 2017
+
+keeps <- c("name", "date", "market")
+crypto_2017_corrs <- crypto_2017[keeps]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+crypto_2017_corrs <- arrange(spread(crypto_2017_corrs, name, market), date)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+crypto_2017_corrs <- 
+  merge(summarise(group_by(crypto_2017, date), daily_total_market = mean(daily_total_market)), crypto_2017_corrs, on=date)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+head(crypto_2017_corrs)
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Select 10 of the major tokens to compare with ggplot
+
+crypto_2017_corrs_select <- crypto_2017_corrs[c("daily_total_market", "bitcoin", 
+          "dash", "ethereum", "ethereum-classic", "litecoin", "monero", "nem", 
+          "neo", "ripple")]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Build correlation matrix for market capitalization changes in 2017
+
+ggpairs(crypto_2017_corrs_select)
+```
+
+Here we get a look at the correlation of marketcap changes of some of the top cryptocurrencies of 2017. We see a high level of correlation. R = 0.731 to 0.987.
+
+We see that monero, bitcoin and dash are very highly correlated to the changes in the overall market. Whereas ripple is the least correlated to overall market with R = 0.811.
+
+Now I will look at the correlation of all of the tokens change in marketcap vs the change in marketcap of the overall cryptocurrency market for 2017.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Build list of tokens ordered by correlation to overall market
+correlation_2017_list <- data.frame(cor(crypto_2017_corrs[,2:1347],
+                                        crypto_2017_corrs[,2]))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+library(data.table)
+setDT(correlation_2017_list, keep.rownames = TRUE)[]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+colnames(correlation_2017_list)[1] <- "token"
+colnames(correlation_2017_list)[2] <- "R"
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE, cache=FALSE}
+correlation_2017_list <- correlation_2017_list[order(-correlation_2017_list$R), 
+                                               drop = FALSE]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+head(correlation_2017_list)
+```
+
+This list shows the tokens most correlated to the overall market. Monero, Dash and Bitcoin are very highly correlated to the overall market.
+
+Now let's plot the distribution of correlation coefficients
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=R), data=correlation_2017_list) + 
+  geom_histogram(fill='#099DD9', binwidth=0.025) + 
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.1)) +
+  scale_y_continuous(breaks= seq(0,30,5)) + 
+  labs(title = 'Distribution of Correlation: Token vs Total Market in 2017', 
+x = 'Correlation Coefficient (R): Token vs Total Market Capitalization in 2017', 
+       y = 'Tokens')
+```
+
+Here we see the distribution of correlations of tokens to the overall market for 2017. Most of the tokens are highly correlated. However there is a considerable amount of tokens that are not correlated.
+
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \ investigation. How did the feature(s) of interest vary with other features in \ the dataset?
+
+The market capitalization of cryptocurrencies has increased exponentially since 2013 and especially in 2017. 
+
+In 2017, some tokens increased in value as much as 40,000x. However, the increase of value in tokens wasn't uniform. It was log normally distributed with the top performing tokens drastically outgaining the rest.
+
+50% of the tokens gained less than 15.6x and 90% gained less than 379x.
+
+The market as a whole gained 31.7x in 2017.
+
+I built a correlation matrix for some of the top tokens and it is apparent that changes in market capitalization for these tokens is highly correlated with eachother. It's a highly correlated asset class with R = 0.731 to 0.987 for the tops tokens.
+
+### Did you observe any interesting relationships between the other features \ (not the main feature(s) of interest)?
+
+I observed that 2017 rise in price appears to have no correlation to end of year market cap of tokens. 
+
+I also saw that trading volume had a linear relationship to market cap size with r^2 = 0.813
+
+### What was the strongest relationship you found?
+
+The strongest relationship is in the exponential rise of token market capitalization over time. The correlation among tokens is very strong for the tokens with the largest market cap but it is highly dispersed among smaller tokens.
+
+# Multivariate Plots Section
+
+In this section I will investigate some final multi-variate relationships.
+
+Here I plot the performance of some of the tokens with the largest market caps against eachother for 2017.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=gain_ratio), data=subset(crypto_2017, ranknow <= 10 & 
+  name != "ripple" & name != "nem" & name != "neo" & name != "stellar")) + 
+  geom_line(aes(color=name)) +
+  ggtitle('2017 Ratio of Price Increase for Major Cryptocurrencies')
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=gain_ratio), data=subset(crypto_2017, ranknow <= 10 & 
+  name != "bitcoin-cash" & name != "eos" & name != "bitcoin" & 
+  name != "cardano" & name != "litecoin" & name != "ethereum")) + 
+  geom_line(aes(color=name)) +
+  ggtitle('2017 Ratio of Price Increase for Major Cryptocurrencies')
+```
+
+All of the major coins increased in value in 2017. The biggest winners were NEO which went up over 500x and now is one of the biggest tokens in the market. As well as, NEM and Ripple which both went up 300x or more. 
+
+Below, we look at whether investing in older or newer currencies would have resulted in more gains for 2017.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x = date, y = gain_ratio),
+       data = crypto_2017) +
+geom_line(aes(color = year_started_tracking), stat = 'summary', fun.y = mean) +
+ggtitle('2017 Avg Ratio of Price Increase Categorized by Year Token Introduced')
+```
+
+It's not clear.
+
+But, it looks like if you had spread your investments in tokens that started from 2016 and 2015 you would have made the best return.
+
+### Market Share
+
+Bitcoin has been the dominant force in the cryptocurrency world since it began.
+
+Let's look at how marketshare has been divided among the top coins over time.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=market_share),
+       data= subset(df_crypto, market_share > 0.05)) +
+  geom_line(aes(color=name)) + 
+  geom_hline(yintercept = 1) + 
+  labs(title = 'Market Share of Top Cryptocurrencies Over Time', 
+       x = 'Date', y = 'Market Share %')
+```
+
+We can see that Bitcoin lost alot of marketshare in 2017 to Etheruem and Ripple. But it is still the dominant token.
+
+But what is auroracoin?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=market_share),
+       data= subset(df_crypto, name=="auroracoin")) +
+  geom_line() +
+  ggtitle('Auroracoin Market Share Over Time')
+```
+
+It looks like auroracoin achieved 6% market share in 2014 briefly before disappearing to irrelevance.
+
+What about litecoin?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=market_share),data= subset(df_crypto, name=="litecoin")) +
+  geom_line(aes(color=name)) +
+  ggtitle('Litecoin Market Share Over Time')
+```
+
+Litecoin has been between 2 and 6% market share since it's inception.
+
+
+Today, the 3 largest players in the cryptocurrency market are Bitcoin, Ethereum and Ripple.
+
+Below I plot their growth in market cap over time.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(x=date, y=market), data=subset(df_crypto, name=="bitcoin" | 
+  name=="ethereum" | name=="ripple")) + geom_line(aes(color=name)) + 
+  scale_y_log10() +
+ggtitle('Log_10 Market Cap Growth for Bitcoin, Etheruem, and Ripple Over Time')
+```
+
+Exponential growth has been the norm for these 3 dominant tokens.
+
+
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \ investigation. Were there features that strengthened each other in terms of \ looking at your feature(s) of interest?
+
+Although the majority of cryptocurrencies went up in value in 2017. When we plot the gains side by side, even among highly correlated tokens with the highest market caps we can see that some increased much more than others. 
+
+Bitcoin has been the dominant cryptocurrency since inception. However, it's interesting to note that Etheruem and Ripple gained tremendous marketshare in 2017.
+
+
+### Were there any interesting or surprising interactions between features?
+
+Bitcoin has been the dominant token over the years. However, it was also interesting to see that over the years there have been some tokens (like Auroracoin) that came, acquired some market share and then disappeared. 
+
+It was also interesting to see that tokens born in 2015 and 2016 perfomed better on the whole in 2017 than the other years. I wasn't able to explain a reason for this.
+
+
+------
+
+# Final Plots and Summary
+
+### Plot One - Growth
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_One}
+
+q1 <- ggplot(aes(x=date, y=market_size), 
+  data=summarise(group_by(df_crypto, date), market_size = sum(market))) + 
+  geom_line(color="#196F3D") + 
+  scale_y_log10() + 
+  labs(title = 'Log_10 Cryptocurrency Total Market Capitalization Growth in USD'
+       , x = 'Date', y = 'Market Cap USD')
+
+q2 <- ggplot(aes(x=date, y=tokens), data = summarise(group_by(df_crypto, date),
+         tokens=length(unique(name)))) + 
+  geom_line(color='#E74C3C') + 
+  labs(title = 'Growth in Number of Crypto Tokens', x = 'Date', y = 'Tokens')
+
+q3 <- ggplot(aes(x=date, y=trading_volume), 
+  data=summarise(group_by(df_crypto, date), trading_volume = sum(volume))) + 
+  geom_line(color='#099DD9') + 
+  scale_y_log10() + 
+  labs(title = 'Log_10 Cryptocurrency Daily Trading Volume Growth in USD', 
+       x = 'Date', y = 'Trading Volume USD')
+
+grid.arrange(q1, q2, q3, ncol=1)
+```
+
+### Description One - Growth
+
+The cryptocurrency market has grown exponentially since 2013.
+
+The total cryptocurrency market capitalization has grown exponentially from $1.5 billion in 2013 to a peak of around $800 billion at the end of 2017.
+
+In 2013 the number of tokens being tracked on coinmarketcap.com was 6. As of 28-Jan-2018 that number was 1494 and growing.
+
+With larger marketcaps and more tokens the trading volume has grown exponentially as well.
+Trading volume has grown from around $100 million per day at the beginning of 2014 to an about of $25 billion per day around the end of 2017.
+
+
+### Plot Two - The Dominant Crypto Tokens
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Two}
+
+r1 <- ggplot(aes(x=market), data=crypto_28_jan_2018) + 
+  geom_histogram(fill='#099DD9') +
+  scale_x_log10() +
+  labs(title = 'Log_10 Distribution of Cryptocurrency Market Capitalizations on 28-Jan-2018', 
+       x = 'Market Capitalization in USD', y = 'Tokens')
+
+r2 <- ggplot(aes(x=name, y=market), 
+             data = (subset(crypto_28_jan_2018, market >
+             quantile(market, prob = 1 - 0.5/100)))) +
+  geom_col(fill='#E74C3C') + 
+  labs(title = 'Market Capitalizations of Top Cryptocurrencies 28-Jan-2018', 
+       x = 'Tokens', y = 'Market Cap in USD')
+
+r3 <- ggplot(aes(x=date, y=market_share),
+             data= subset(df_crypto, market_share > 0.1)) +
+  geom_line(aes(color=name)) + 
+  geom_hline(yintercept = 1) + 
+  labs(title = 'Market Share of Top Cryptocurrencies Over Time', 
+       x = 'Date', y = 'Market Share %')
+
+grid.arrange(r1, r2, r3, ncol=1)
+
+```
+
+### Description Two - The Dominant Crypto Tokens
+
+As of 28-Jan-2018, there were 1494 tokens being tracked on coinmarketcap.com. 
+
+However, the market capitalization among those tokens is logarithmically distributed. 50% of tokens have a market capitalization under $1.7 million and 90% of tokens have a market capitalization under $145 million.
+
+The top 10% of tokens account for 96.9% of the total market, and the top 1% account for 83.1% of total market.
+
+Even among the top 1% of tokens, Bitcoin, Ethereum, and Ripple are dominant.
+
+Bitcoin has been the dominant crypto token since inception and has continued to hold market position even with 1494 coins. However, as we can see from the plot this has started to change in resent years. Ethereum and Ripple have been gaining marketshare in recent years and in 2017 Ethereum almost overtook bitcoin as the dominant token and newcomer Bitcoin Cash at one point had more than 10% Market Share. 
+
+
+### Plot Three - Uneven Gains
+```{r echo=FALSE, message=FALSE, warning=FALSE, Plot_Three}
+
+s1<- ggplot(aes(x=gain_ratio), data=crypto_gains_2017) + 
+  geom_histogram(fill='#58D68D') + 
+  geom_vline(xintercept=31.7, label="Whole Market") +
+  geom_text(aes(x=27, label="Market Gain 31.7x", y=9), angle=90) +
+  scale_x_log10() + 
+  labs(title='Log_10 Distribution of Token Gain Ratios in Price in 2017',
+       x = 'End of 2017 Price / Initial 2017 Price', y = 'Tokens')
+
+s2 <- ggplot(aes(x=R), data=correlation_2017_list) + 
+  geom_histogram(fill='#099DD9', binwidth=0.025) + 
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 0.1)) +
+  scale_y_continuous(breaks= seq(0,30,5)) + 
+  labs(title = 'Distribution of Correlation: Token vs Total Market in 2017', 
+x = 'Correlation Coefficient (R): Token vs Total Market Capitalization in 2017', 
+       y = 'Tokens')
+
+grid.arrange(s1, s2, ncol=1)
+```
+
+### Description Three - Uneven Gains
+
+In 2017 the cryptocurrency market saw exponential growth. The total market capitalization grew 31.7x. 
+
+However, this growth wasn't evenly distributed among tokens. Some tokens saw as much as 10,000 or 40,000x gains. However, the vast majority saw growth more inline with overall market growth. 50% of tokens grew 15.6x or less and 90% of tokens grew 379x or less.
+
+Many coins are highly correlated with the overall market. However, many are not. The second graph shows the distribution of correlations between tokens and the overall market for 2017.
+
+
+------
+
+# Reflection
+
+Reflecting on this data exploration. 
+
+The largest difficulties came as i tried to understand why some tokens change in price and market cap differed so greatly from that of other tokens.
+
+Initially, in addition to exploring the data with plots and statistics I would have liked to create a model for predicting future market changes. As I dug deeper into the data I found it more and more difficult to think of a potential model to fit the data.
+
+One reason for this is that the dataset was limited in that it only gave price and market capitalization information.
+
+Ideally I would have information on the developer community building the crypto assets, the community surrounding the project, and information on public opinion of each coin as well. In that way I may be better able to predict market as well as individual token growth or decline over time.
+
+For a future project I plan to scrap individual token data such as developer activity, community engagement, and public interest from a website like https://www.coingecko.com/en and use this data as part of a model for predicting future performance.
+
+However, I believe I was successful in exploring the data I had. I learned a great deal about how the cryptocurrency market has evolved over the last 5 years. How it has grown in terms of capital, token quantity and trading volume. I got a nice, big picture view of the landscape as it stands today. And even though I don't know why the performance of some tokens varied so much I was able to grasp the vast difference that exists among token performance and this has intrigued me to research more.
+

@@ -1,0 +1,15 @@
+Dataset scraped using package:
+library(crypto)
+
+Acquired from:
+https://github.com/JesseVent/crypto
+
+File saved as:
+coinmarket_290118.csv on 29-Jan-2018
+
+Other resources used during project:
+https://stackoverflow.com/
+Udacity - Exploratory Data Analysis Course
+https://coinmarketcap.com/
+https://www.coingecko.com/en
+https://stackexchange.com/
